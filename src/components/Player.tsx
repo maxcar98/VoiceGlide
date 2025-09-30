@@ -1,11 +1,10 @@
-// src/components/Player.tsx
 import React, { useEffect, useRef } from "react";
 import { Animated, ViewStyle } from "react-native";
 
 type Props = {
   x: number;
   y: number;
-  jumpTick: number; // bumpas vid varje hopp för att trigga anim
+  jumpTick: number;
   size?: number;
   style?: ViewStyle;
 };
