@@ -1,3 +1,4 @@
+// src/screens/PlayScreen.tsx
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { LinearGradient } from "expo-linear-gradient";
@@ -7,25 +8,34 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import Obstacles, { Obstacle } from "../components/Obstacles";
+import Obstacles from "../components/Obstacles";
 import Player from "../components/Player";
+import {
+  applyScoring,
+  checkCollision,
+  createConfig,
+  type GameConfig,
+  moveObstacles,
+  type Obstacle,
+  spawnObstacle,
+  stepPlayer,
+  trimOffscreen,
+} from "../logic/game";
 
 type GamePhase = "ready" | "playing" | "gameover";
 
 export default function PlayScreen() {
   useKeepAwake();
-
   const insets = useSafeAreaInsets();
 
+  // Window metrics (for placing start text only)
   const HEIGHT = Dimensions.get("window").height;
-  const WIDTH = Dimensions.get("window").width;
 
-  // --- Player ---
-  const PLAYER_SIZE = 32;
-  const PLAYER_RADIUS_RENDER = PLAYER_SIZE / 2;
-  const PLAYER_RADIUS_HIT = PLAYER_RADIUS_RENDER * 0.88; // lite mindre hitbox
+  // Config (derived from current window)
+  const cfgRef = useRef<GameConfig>(createConfig());
 
-  const [y, setY] = useState(HEIGHT * 0.5);
+  // Player state
+  const [y, setY] = useState(cfgRef.current.HEIGHT * 0.5);
   const yRef = useRef(y);
   useEffect(() => {
     yRef.current = y;
@@ -34,36 +44,24 @@ export default function PlayScreen() {
   const velYRef = useRef(0);
   const [jumpTick, setJumpTick] = useState(0);
 
-  // Physics
-  const GRAVITY = 0.75;
-  const JUMP_VELOCITY = -11.5;
-  const FLOOR_Y = HEIGHT - 6;
-  const CEIL_Y = 6;
-  const PLAYER_X = Math.min(100, WIDTH * 0.25);
-
-  // --- Game state ---
+  // Game state
   const [phase, setPhase] = useState<GamePhase>("ready");
   const [score, setScore] = useState(0);
 
-  // --- Obstacles ---
+  // Obstacles
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
   const obstaclesRef = useRef<Obstacle[]>([]);
   useEffect(() => {
     obstaclesRef.current = obstacles;
   }, [obstacles]);
 
-  // Obstacle config
-  const OBSTACLE_WIDTH = Math.max(48, Math.floor(WIDTH * 0.12));
-  const GAP_HEIGHT = Math.max(140, Math.floor(HEIGHT * 0.26));
-  const SCROLL_SPEED = Math.max(2.6, WIDTH * 0.0045);
-  const SPAWN_INTERVAL_MS = 1500;
-  const FIRST_SPAWN_DELAY_MS = 1000;
-
   // Tap → start / jump / restart
   const handleTap = async () => {
+    const cfg = cfgRef.current;
+
     if (phase === "gameover") {
       setPhase("ready");
-      setY(HEIGHT * 0.5);
+      setY(cfg.HEIGHT * 0.5);
       velYRef.current = 0;
       setObstacles([]);
       setScore(0);
@@ -76,7 +74,7 @@ export default function PlayScreen() {
     if (phase === "ready") {
       setScore(0);
       setObstacles([]);
-      velYRef.current = JUMP_VELOCITY;
+      velYRef.current = cfg.JUMP_VELOCITY;
       setJumpTick((t) => t + 1);
       setPhase("playing");
       try {
@@ -87,40 +85,25 @@ export default function PlayScreen() {
 
     if (phase !== "playing") return;
 
-    velYRef.current = JUMP_VELOCITY;
+    velYRef.current = cfg.JUMP_VELOCITY;
     setJumpTick((t) => t + 1);
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {}
   };
 
-  // Spawn loop
+  // Spawn loop (delay + interval)
   useEffect(() => {
     if (phase !== "playing") return;
+    const cfg = cfgRef.current;
 
     let spawnDelayTimeout: NodeJS.Timeout | null = null;
     let spawnInterval: NodeJS.Timeout | null = null;
 
-    const spawn = () => {
-      const marginTop = 60;
-      const marginBottom = 60;
-      const minY = marginTop + GAP_HEIGHT / 2;
-      const maxY = HEIGHT - marginBottom - GAP_HEIGHT / 2;
-      const gapY = rand(minY, maxY);
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const spawn = () => setObstacles((prev) => [...prev, spawnObstacle(cfg)]);
 
-      setObstacles((prev) => [
-        ...prev,
-        {
-          id,
-          x: WIDTH + OBSTACLE_WIDTH,
-          gapY,
-          width: OBSTACLE_WIDTH,
-          gap: GAP_HEIGHT,
-          scored: false,
-        },
-      ]);
-    };
+    const FIRST_SPAWN_DELAY_MS = 1000;
+    const SPAWN_INTERVAL_MS = 1500;
 
     spawnDelayTimeout = setTimeout(() => {
       spawn();
@@ -131,15 +114,7 @@ export default function PlayScreen() {
       if (spawnDelayTimeout) clearTimeout(spawnDelayTimeout);
       if (spawnInterval) clearInterval(spawnInterval);
     };
-  }, [
-    phase,
-    WIDTH,
-    HEIGHT,
-    GAP_HEIGHT,
-    OBSTACLE_WIDTH,
-    SPAWN_INTERVAL_MS,
-    FIRST_SPAWN_DELAY_MS,
-  ]);
+  }, [phase]);
 
   // Main loop
   useEffect(() => {
@@ -147,48 +122,31 @@ export default function PlayScreen() {
 
     const tick = () => {
       if (phase === "playing") {
-        velYRef.current += GRAVITY;
-        let nextY = yRef.current + velYRef.current;
+        const cfg = cfgRef.current;
 
-        if (nextY < CEIL_Y) {
-          nextY = CEIL_Y;
-          velYRef.current = 0;
-        }
-        if (nextY > FLOOR_Y) {
-          nextY = FLOOR_Y;
-          velYRef.current = 0;
-        }
+        // Player step
+        const p = stepPlayer(yRef.current, velYRef.current, cfg);
+        velYRef.current = p.velY;
+        yRef.current = p.y;
+        setY(p.y);
 
-        yRef.current = nextY;
-        setY(nextY);
-
-        const moved = obstaclesRef.current.map((o) => ({
-          ...o,
-          x: o.x - SCROLL_SPEED,
-        }));
-
-        let gained = 0;
-        const withScore = moved.map((o) => {
-          if (!o.scored && o.x + o.width < PLAYER_X) {
-            gained += 1;
-            return { ...o, scored: true };
-          }
-          return o;
-        });
-
-        const kept = withScore.filter((o) => o.x + o.width > 0);
-
+        // Obstacles step
+        let moved = moveObstacles(obstaclesRef.current, cfg);
+        const { items: withScore, gained } = applyScoring(moved, cfg.PLAYER_X);
+        const kept = trimOffscreen(withScore);
         setObstacles(kept);
         if (gained) setScore((s) => s + gained);
 
-        const hit = checkCollisionCircleVsColumns(
-          PLAYER_X,
+        // Collision
+        const hit = checkCollision(
+          cfg.PLAYER_X,
           yRef.current,
-          PLAYER_RADIUS_HIT,
-          kept
+          cfg.PLAYER_HIT_RADIUS,
+          kept,
+          cfg
         );
         if (hit) {
-          velYRef.current = 0; // frys direkt vit kollision
+          velYRef.current = 0; //frys direkt vid kollision
           setPhase("gameover");
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -201,23 +159,24 @@ export default function PlayScreen() {
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [phase, GRAVITY, FLOOR_Y, CEIL_Y, SCROLL_SPEED]);
+  }, [phase]);
 
-  // Reset to ready when entering screen
+  // Reseta till ready state
   useEffect(() => {
+    const cfg = cfgRef.current;
     setPhase("ready");
-    setY(HEIGHT * 0.5);
+    setY(cfg.HEIGHT * 0.5);
     velYRef.current = 0;
     setObstacles([]);
     setScore(0);
-  }, [HEIGHT]);
+  }, []);
 
   return (
     <LinearGradient
       colors={["#0f2027", "#203a43", "#2c5364"]}
       style={{ flex: 1 }}
     >
-      {/* solid top bar */}
+      {/* Solid top bar*/}
       <View
         pointerEvents="none"
         style={{
@@ -233,7 +192,7 @@ export default function PlayScreen() {
       />
       <SafeAreaView style={{ flex: 1 }}>
         <Pressable onPressIn={handleTap} style={{ flex: 1 }}>
-          {/* Score */}
+          {/* Score – big, top-right */}
           <Text
             style={{
               position: "absolute",
@@ -284,7 +243,7 @@ export default function PlayScreen() {
             </View>
           )}
 
-          {/* Game Over overlay + final score in center */}
+          {/* Game Over overlay */}
           {phase === "gameover" && (
             <View
               style={{
@@ -343,40 +302,10 @@ export default function PlayScreen() {
 
           {/* Player */}
           <View style={{ flex: 1 }}>
-            <Player x={PLAYER_X} y={y} jumpTick={jumpTick} />
+            <Player x={cfgRef.current.PLAYER_X} y={y} jumpTick={jumpTick} />
           </View>
         </Pressable>
       </SafeAreaView>
     </LinearGradient>
   );
-}
-
-function rand(min: number, max: number) {
-  return Math.floor(min + Math.random() * (max - min));
-}
-
-// Förenklade kollisionerna lite så man inte förlorar pga pyttesmå missar
-// (speciellt på högupplösta skärmar där spelaren är liten)
-const EDGE_PAD = 3;
-
-function checkCollisionCircleVsColumns(
-  px: number,
-  py: number,
-  pr: number,
-  obstacles: Obstacle[]
-) {
-  for (const o of obstacles) {
-    // require overlap with a small inward pad on both sides
-    const overlapX =
-      px + pr > o.x + EDGE_PAD && px - pr < o.x + o.width - EDGE_PAD;
-    if (!overlapX) continue;
-
-    // widen the passable gap a touch
-    const gapTop = o.gapY - o.gap / 2 - EDGE_PAD;
-    const gapBottom = o.gapY + o.gap / 2 + EDGE_PAD;
-
-    if (py - pr < gapTop) return true; // hit top column
-    if (py + pr > gapBottom) return true; // hit bottom column
-  }
-  return false;
 }

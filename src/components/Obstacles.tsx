@@ -1,18 +1,8 @@
 import React from "react";
 import { Dimensions, View } from "react-native";
+import type { Obstacle } from "../logic/game";
 
-export type Obstacle = {
-  id: string;
-  x: number; // vänsterkant
-  gapY: number; // mitten på gapet
-  width: number;
-  gap: number; // gap-höjd
-  scored?: boolean; // markerar om poäng redan givits
-};
-
-type Props = {
-  items: Obstacle[];
-};
+type Props = { items: Obstacle[] };
 
 export default function Obstacles({ items }: Props) {
   const H = Dimensions.get("window").height;
@@ -47,7 +37,7 @@ export default function Obstacles({ items }: Props) {
 
         return (
           <React.Fragment key={o.id}>
-            {/* Övre stolpen */}
+            {/* Top column */}
             <View
               style={[
                 pillarStyle,
@@ -57,10 +47,11 @@ export default function Obstacles({ items }: Props) {
                   height: topHeight,
                   borderBottomLeftRadius: 10,
                   borderBottomRightRadius: 10,
+                  borderTopWidth: 0, // döljer gröna linjen längst upp
                 },
               ]}
             />
-            {/* Nedre stolpen */}
+            {/* Bottom column */}
             <View
               style={[
                 pillarStyle,
@@ -70,6 +61,7 @@ export default function Obstacles({ items }: Props) {
                   height: bottomHeight,
                   borderTopLeftRadius: 10,
                   borderTopRightRadius: 10,
+                  borderBottomWidth: 0, // symmetri
                 },
               ]}
             />
