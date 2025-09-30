@@ -7,6 +7,7 @@ export type Obstacle = {
   gapY: number; // mitten på gapet
   width: number;
   gap: number; // gap-höjd
+  scored?: boolean; // markerar om poäng redan givits
 };
 
 type Props = {
