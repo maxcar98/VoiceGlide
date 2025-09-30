@@ -1,18 +1,53 @@
-import React from "react";
-import { View } from "react-native";
+// src/components/Player.tsx
+import React, { useEffect, useRef } from "react";
+import { Animated, ViewStyle } from "react-native";
 
-export default function Player({ x, y }: { x: number; y: number }) {
+type Props = {
+  x: number;
+  y: number;
+  jumpTick: number; // bumpas vid varje hopp för att trigga anim
+  size?: number;
+  style?: ViewStyle;
+};
+
+export default function Player({ x, y, jumpTick, size = 32, style }: Props) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // liten "pop" vid hopp: 1 → 1.15 → 1
+    Animated.sequence([
+      Animated.timing(scale, {
+        toValue: 1.15,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scale, {
+        toValue: 1,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [jumpTick, scale]);
+
   return (
-    <View
-      style={{
-        position: "absolute",
-        left: x - 16,
-        top: y - 16,
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: "gold",
-      }}
+    <Animated.View
+      style={[
+        {
+          position: "absolute",
+          left: x - size / 2,
+          top: y - size / 2,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: "gold",
+          transform: [{ scale }],
+          shadowColor: "#000",
+          shadowOpacity: 0.25,
+          shadowRadius: 6,
+          elevation: 3,
+        },
+        style,
+      ]}
     />
   );
 }
