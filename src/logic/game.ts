@@ -30,7 +30,7 @@ export type GameConfig = {
   SCROLL_SPEED: number;
 
   // Collision forgiveness
-  EDGE_PAD: number; // px – drar in pelarsidor och breddar gapet lite
+  EDGE_PAD: number;
 };
 
 export function createConfig(): GameConfig {

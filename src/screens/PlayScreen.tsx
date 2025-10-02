@@ -1,4 +1,5 @@
 // src/screens/PlayScreen.tsx
+import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,8 +9,11 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+
+import NamePrompt from "../components/NamePrompt";
 import Obstacles from "../components/Obstacles";
 import Player from "../components/Player";
+import { useScores } from "../context/ScoresContext";
 import {
   applyScoring,
   checkCollision,
@@ -27,11 +31,12 @@ type GamePhase = "ready" | "playing" | "gameover";
 export default function PlayScreen() {
   useKeepAwake();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
 
   // Window metrics (for placing start text only)
   const HEIGHT = Dimensions.get("window").height;
 
-  // Config (derived from current window)
+  // Config
   const cfgRef = useRef<GameConfig>(createConfig());
 
   // Player state
@@ -47,6 +52,10 @@ export default function PlayScreen() {
   // Game state
   const [phase, setPhase] = useState<GamePhase>("ready");
   const [score, setScore] = useState(0);
+  const scoreRef = useRef(0); // <-- NYTT
+  useEffect(() => {
+    scoreRef.current = score; // håll ref i synk
+  }, [score]);
 
   // Obstacles
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
@@ -54,6 +63,10 @@ export default function PlayScreen() {
   useEffect(() => {
     obstaclesRef.current = obstacles;
   }, [obstacles]);
+
+  const { qualifies, addScore } = useScores();
+  const [askName, setAskName] = useState(false);
+  const [newScoreId, setNewScoreId] = useState<string | null>(null);
 
   // Tap → start / jump / restart
   const handleTap = async () => {
@@ -65,6 +78,7 @@ export default function PlayScreen() {
       velYRef.current = 0;
       setObstacles([]);
       setScore(0);
+      scoreRef.current = 0; // <-- reset ref också
       try {
         await Haptics.selectionAsync();
       } catch {}
@@ -73,6 +87,7 @@ export default function PlayScreen() {
 
     if (phase === "ready") {
       setScore(0);
+      scoreRef.current = 0;
       setObstacles([]);
       velYRef.current = cfg.JUMP_VELOCITY;
       setJumpTick((t) => t + 1);
@@ -92,7 +107,7 @@ export default function PlayScreen() {
     } catch {}
   };
 
-  // Spawn loop (delay + interval)
+  // Spawn loop
   useEffect(() => {
     if (phase !== "playing") return;
     const cfg = cfgRef.current;
@@ -133,9 +148,18 @@ export default function PlayScreen() {
         // Obstacles step
         let moved = moveObstacles(obstaclesRef.current, cfg);
         const { items: withScore, gained } = applyScoring(moved, cfg.PLAYER_X);
+
+        if (gained) {
+          // uppdatera både state och ref
+          setScore((s) => {
+            const ns = s + gained;
+            scoreRef.current = ns;
+            return ns;
+          });
+        }
+
         const kept = trimOffscreen(withScore);
         setObstacles(kept);
-        if (gained) setScore((s) => s + gained);
 
         // Collision
         const hit = checkCollision(
@@ -146,8 +170,14 @@ export default function PlayScreen() {
           cfg
         );
         if (hit) {
-          velYRef.current = 0; //frys direkt vid kollision
+          velYRef.current = 0;
           setPhase("gameover");
+
+          // Kolla high score
+          if (qualifies(scoreRef.current)) {
+            setAskName(true);
+          }
+
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           } catch {}
@@ -161,7 +191,7 @@ export default function PlayScreen() {
     return () => cancelAnimationFrame(raf);
   }, [phase]);
 
-  // Reseta till ready state
+  // Reset on mount
   useEffect(() => {
     const cfg = cfgRef.current;
     setPhase("ready");
@@ -169,6 +199,7 @@ export default function PlayScreen() {
     velYRef.current = 0;
     setObstacles([]);
     setScore(0);
+    scoreRef.current = 0;
   }, []);
 
   return (
@@ -284,6 +315,7 @@ export default function PlayScreen() {
               >
                 Score: {score}
               </Text>
+
               <Text
                 style={{
                   color: "white",
@@ -294,6 +326,25 @@ export default function PlayScreen() {
               >
                 Tap to restart
               </Text>
+
+              <Pressable
+                onPress={() =>
+                  navigation.navigate("Leaderboard", {
+                    highlightId: newScoreId,
+                  })
+                }
+                style={{
+                  marginTop: 14,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  backgroundColor: "#22c55e",
+                  borderRadius: 6,
+                }}
+              >
+                <Text style={{ color: "black", fontWeight: "800" }}>
+                  View leaderboard
+                </Text>
+              </Pressable>
             </View>
           )}
 
@@ -305,6 +356,18 @@ export default function PlayScreen() {
             <Player x={cfgRef.current.PLAYER_X} y={y} jumpTick={jumpTick} />
           </View>
         </Pressable>
+
+        {/* Name prompt */}
+        <NamePrompt
+          visible={askName}
+          score={scoreRef.current} // senaste poängen
+          onCancel={() => setAskName(false)}
+          onSubmit={(name) => {
+            const id = addScore(name, scoreRef.current);
+            setNewScoreId(id);
+            setAskName(false);
+          }}
+        />
       </SafeAreaView>
     </LinearGradient>
   );
