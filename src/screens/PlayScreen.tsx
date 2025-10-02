@@ -341,6 +341,15 @@ export default function PlayScreen() {
                   paddingHorizontal: 16,
                 }}
               />
+              <PrimaryButton
+                title="Home"
+                onPress={() => navigation.navigate("Home")}
+                style={{
+                  marginTop: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                }}
+              />
             </View>
           )}
 
