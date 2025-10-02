@@ -13,6 +13,7 @@ import {
 import NamePrompt from "../components/NamePrompt";
 import Obstacles from "../components/Obstacles";
 import Player from "../components/Player";
+import PrimaryButton from "../components/PrimaryButton";
 import { useScores } from "../context/ScoresContext";
 import {
   applyScoring,
@@ -327,7 +328,8 @@ export default function PlayScreen() {
                 Tap to restart
               </Text>
 
-              <Pressable
+              <PrimaryButton
+                title="View leaderboard"
                 onPress={() =>
                   navigation.navigate("Leaderboard", {
                     highlightId: newScoreId,
@@ -335,16 +337,10 @@ export default function PlayScreen() {
                 }
                 style={{
                   marginTop: 14,
+                  paddingVertical: 12,
                   paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  backgroundColor: "#22c55e",
-                  borderRadius: 6,
                 }}
-              >
-                <Text style={{ color: "black", fontWeight: "800" }}>
-                  View leaderboard
-                </Text>
-              </Pressable>
+              />
             </View>
           )}
 
