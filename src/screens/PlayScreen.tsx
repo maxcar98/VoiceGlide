@@ -1,4 +1,3 @@
-// src/screens/PlayScreen.tsx
 import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
@@ -27,6 +26,9 @@ import {
   trimOffscreen,
 } from "../logic/game";
 
+// kvar: BGM + hit (ingen jump)
+import { playHit, startBGM, stopBGM } from "../audio/sound";
+
 type GamePhase = "ready" | "playing" | "gameover";
 
 export default function PlayScreen() {
@@ -34,13 +36,10 @@ export default function PlayScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
 
-  // Window metrics (for placing start text only)
   const HEIGHT = Dimensions.get("window").height;
 
-  // Config
   const cfgRef = useRef<GameConfig>(createConfig());
 
-  // Player state
   const [y, setY] = useState(cfgRef.current.HEIGHT * 0.5);
   const yRef = useRef(y);
   useEffect(() => {
@@ -50,15 +49,13 @@ export default function PlayScreen() {
   const velYRef = useRef(0);
   const [jumpTick, setJumpTick] = useState(0);
 
-  // Game state
   const [phase, setPhase] = useState<GamePhase>("ready");
   const [score, setScore] = useState(0);
-  const scoreRef = useRef(0); // <-- NYTT
+  const scoreRef = useRef(0);
   useEffect(() => {
-    scoreRef.current = score; // håll ref i synk
+    scoreRef.current = score;
   }, [score]);
 
-  // Obstacles
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
   const obstaclesRef = useRef<Obstacle[]>([]);
   useEffect(() => {
@@ -69,7 +66,6 @@ export default function PlayScreen() {
   const [askName, setAskName] = useState(false);
   const [newScoreId, setNewScoreId] = useState<string | null>(null);
 
-  // Tap → start / jump / restart
   const handleTap = async () => {
     const cfg = cfgRef.current;
 
@@ -79,9 +75,10 @@ export default function PlayScreen() {
       velYRef.current = 0;
       setObstacles([]);
       setScore(0);
-      scoreRef.current = 0; // <-- reset ref också
+      scoreRef.current = 0;
       try {
-        await Haptics.selectionAsync();
+        stopBGM();
+        Haptics.selectionAsync();
       } catch {}
       return;
     }
@@ -94,7 +91,8 @@ export default function PlayScreen() {
       setJumpTick((t) => t + 1);
       setPhase("playing");
       try {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        startBGM();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } catch {}
       return;
     }
@@ -104,11 +102,10 @@ export default function PlayScreen() {
     velYRef.current = cfg.JUMP_VELOCITY;
     setJumpTick((t) => t + 1);
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {}
   };
 
-  // Spawn loop
   useEffect(() => {
     if (phase !== "playing") return;
     const cfg = cfgRef.current;
@@ -132,7 +129,6 @@ export default function PlayScreen() {
     };
   }, [phase]);
 
-  // Main loop
   useEffect(() => {
     let raf = 0;
 
@@ -140,18 +136,15 @@ export default function PlayScreen() {
       if (phase === "playing") {
         const cfg = cfgRef.current;
 
-        // Player step
         const p = stepPlayer(yRef.current, velYRef.current, cfg);
         velYRef.current = p.velY;
         yRef.current = p.y;
         setY(p.y);
 
-        // Obstacles step
         let moved = moveObstacles(obstaclesRef.current, cfg);
         const { items: withScore, gained } = applyScoring(moved, cfg.PLAYER_X);
 
         if (gained) {
-          // uppdatera både state och ref
           setScore((s) => {
             const ns = s + gained;
             scoreRef.current = ns;
@@ -162,7 +155,6 @@ export default function PlayScreen() {
         const kept = trimOffscreen(withScore);
         setObstacles(kept);
 
-        // Collision
         const hit = checkCollision(
           cfg.PLAYER_X,
           yRef.current,
@@ -173,12 +165,13 @@ export default function PlayScreen() {
         if (hit) {
           velYRef.current = 0;
           setPhase("gameover");
-
-          // Kolla high score
+          try {
+            playHit();
+            stopBGM();
+          } catch {}
           if (qualifies(scoreRef.current)) {
             setAskName(true);
           }
-
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           } catch {}
@@ -192,7 +185,6 @@ export default function PlayScreen() {
     return () => cancelAnimationFrame(raf);
   }, [phase]);
 
-  // Reset on mount
   useEffect(() => {
     const cfg = cfgRef.current;
     setPhase("ready");
@@ -365,7 +357,7 @@ export default function PlayScreen() {
         {/* Name prompt */}
         <NamePrompt
           visible={askName}
-          score={scoreRef.current} // senaste poängen
+          score={scoreRef.current}
           onCancel={() => setAskName(false)}
           onSubmit={(name) => {
             const id = addScore(name, scoreRef.current);

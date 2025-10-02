@@ -53,7 +53,7 @@ export function createConfig(): GameConfig {
     CEIL_Y: 6,
 
     OBSTACLE_WIDTH: Math.max(48, Math.floor(W * 0.12)),
-    GAP_HEIGHT: Math.max(140, Math.floor(H * 0.26)),
+    GAP_HEIGHT: Math.max(120, Math.floor(H * 0.24)),
     SCROLL_SPEED: Math.max(2.6, W * 0.0045),
 
     EDGE_PAD: 3,

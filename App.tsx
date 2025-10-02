@@ -1,6 +1,7 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import React from "react";
+import React, { useEffect } from "react";
+import { cleanupAudio } from "./src/audio/sound";
 import { ScoresProvider } from "./src/context/ScoresContext";
 import HomeScreen from "./src/screens/HomeScreen";
 import LeaderboardScreen from "./src/screens/LeaderboardScreen";
@@ -9,6 +10,12 @@ import PlayScreen from "./src/screens/PlayScreen";
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  useEffect(() => {
+    return () => {
+      cleanupAudio();
+    };
+  }, []);
+
   return (
     <ScoresProvider>
       <NavigationContainer>
