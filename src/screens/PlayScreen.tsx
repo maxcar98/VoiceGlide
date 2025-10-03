@@ -26,7 +26,6 @@ import {
   trimOffscreen,
 } from "../logic/game";
 
-// kvar: BGM + hit (ingen jump)
 import { playHit, startBGM, stopBGM } from "../audio/sound";
 
 type GamePhase = "ready" | "playing" | "gameover";

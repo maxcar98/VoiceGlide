@@ -13,7 +13,6 @@ export default function Player({ x, y, jumpTick, size = 32, style }: Props) {
   const scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // liten "pop" vid hopp: 1 → 1.15 → 1
     Animated.sequence([
       Animated.timing(scale, {
         toValue: 1.15,

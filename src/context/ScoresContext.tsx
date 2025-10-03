@@ -40,18 +40,18 @@ export function ScoresProvider({ children }: { children: React.ReactNode }) {
           setScores(parsed);
         }
       } catch {
-        // ignore
+        // skiter i
       }
     })();
   }, []);
 
-  // Persist when scores change
+  // Spara vid ändring
   useEffect(() => {
     (async () => {
       try {
         await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(scores));
       } catch {
-        // ignore
+        // skiter i
       }
     })();
   }, [scores]);
